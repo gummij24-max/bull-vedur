@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bull-Veður</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <span class="logo-bull">🐂</span>
+      <h1>Bull-Veður</h1>
+    </div>
+    <p class="tagline">Sláðu inn heimilisfang eða smelltu á veðurstöð á kortinu</p>
+  </header>
+
+  <main>
+    <!-- Search -->
+    <div class="search-wrapper">
+      <div class="search-box">
+        <input
+          type="text"
+          id="search-input"
+          placeholder="T.d. Laugavegur 10, 101 Reykjavík..."
+          autocomplete="off"
+          aria-label="Heimilisfang"
+        />
+        <button id="search-btn" aria-label="Leita">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+    </div>
+
+    <div id="error-msg" class="error-msg" hidden></div>
+
+    <!-- Map – always visible -->
+    <div class="map-section">
+      <div id="map"></div>
+      <div class="map-legend">
+        <span id="map-legend-status">Hleð veðurstöðvar…</span>
+        <span id="map-legend-markers" hidden>📍 Leitarstaður</span>
+      </div>
+    </div>
+
+    <!-- Weather + forecast – hidden until search/click -->
+    <div id="results" class="results" hidden>
+
+      <!-- Current weather -->
+      <div class="weather-card">
+        <div class="weather-header">
+          <div>
+            <h2 id="address-label"></h2>
+            <p class="station-label">Veðurgögn frá: <strong id="station-name"></strong></p>
+          </div>
+          <div id="time-label" class="time-label"></div>
+        </div>
+
+        <div class="weather-main">
+          <div class="temp-big">
+            <div class="temp-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+              </svg>
+            </div>
+            <span class="temp-num"><span id="temp">—</span>°C</span>
+          </div>
+          <div class="weather-main-divider"></div>
+          <div class="weather-desc-block">
+            <div class="weather-desc-icon" id="vedurlag-icon"></div>
+            <div class="weather-desc" id="vedurlag"></div>
+          </div>
+        </div>
+
+        <div class="weather-grid">
+          <div class="weather-item">
+            <div class="weather-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+                <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+                <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+              </svg>
+            </div>
+            <div class="weather-value"><span id="wind">—</span> <small>m/s</small></div>
+            <div class="weather-label">Vindhradi</div>
+          </div>
+          <div class="weather-item">
+            <div class="weather-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+              </svg>
+            </div>
+            <div class="weather-value" id="wind-dir">—</div>
+            <div class="weather-label">Vindstefna</div>
+          </div>
+          <div class="weather-item" id="raki-item">
+            <div class="weather-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+              </svg>
+            </div>
+            <div class="weather-value"><span id="raki">—</span><small>%</small></div>
+            <div class="weather-label">Rakastig</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Forecast -->
+      <div id="forecast-section" class="forecast-section" hidden>
+        <h3 class="section-title">Veðurspá næstu daga</h3>
+        <div id="forecast-cards" class="forecast-cards"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>Veðurgögn: <a href="https://vedur.is" target="_blank" rel="noopener">Veðurstofa Íslands</a>
+       &middot; Kort: <a href="https://openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a></p>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // ── DOM refs ──────────────────────────────────────────────────────────
+    const searchInput     = document.getElementById("search-input");
+    const searchBtn       = document.getElementById("search-btn");
+    const suggestionsList = document.getElementById("suggestions");
+    const resultsDiv      = document.getElementById("results");
+    const errorMsg        = document.getElementById("error-msg");
+
+    // ── State ─────────────────────────────────────────────────────────────
+    let map            = null;
+    let locationMarker = null;
+    let suggestTimeout = null;
+    let activeSugg     = -1;
+
+    // ── SVG icons (Lucide paths, reused in forecast cards) ────────────────
+    const _s = (body) =>
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+
+    const FC_ICON = {
+      wind:    _s(`<path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>`),
+      compass: _s(`<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>`),
+      droplet: _s(`<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>`),
+    };
+
+    const VIKUDAGAR = ["Sunnudagur","Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur"];
+    const MANUDUR   = ["janúar","febrúar","mars","apríl","maí","júní","júlí","ágúst","september","október","nóvember","desember"];
+
+    function formatDay(dateStr) {
+      const today    = new Date().toISOString().slice(0, 10);
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      if (dateStr === today)    return "Í dag";
+      if (dateStr === tomorrow) return "Á morgun";
+      return VIKUDAGAR[new Date(dateStr + "T12:00:00").getDay()];
+    }
+
+    function formatDate(d) {
+      return `${d.getDate()}. ${MANUDUR[d.getMonth()]}`;
+    }
+
+    // ── Map initialisation (on page load) ─────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      map = L.map("map").setView([64.9, -18.5], 6);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+      addTempLegend();
+      loadStations();
+    });
+
+    // ── Temperature legend (Leaflet control, bottom-right) ────────────────
+    const TEMP_SCALE = [
+      { color: "#5c35a0", label: "< −10°C" },
+      { color: "#1a6fc4", label: "−10 til −5°C" },
+      { color: "#42a5f5", label: "−5 til 0°C" },
+      { color: "#26a69a", label: "0 til 5°C" },
+      { color: "#9ccc65", label: "5 til 10°C" },
+      { color: "#ffa726", label: "10 til 15°C" },
+      { color: "#ef5350", label: "> 15°C" },
+    ];
+
+    function addTempLegend() {
+      const legend = L.control({ position: "bottomright" });
+      legend.onAdd = () => {
+        const div = L.DomUtil.create("div", "map-temp-legend");
+        div.innerHTML =
+          `<div class="tl-title">Hitastig</div>` +
+          TEMP_SCALE.map(r =>
+            `<div class="tl-row"><span class="tl-dot" style="background:${r.color}"></span>${r.label}</div>`
+          ).join("");
+        return div;
+      };
+      legend.addTo(map);
+    }
+
+    // ── Station markers ───────────────────────────────────────────────────
+    function tempColor(t) {
+      if (t <  -10) return "#5c35a0";
+      if (t <   -5) return "#1a6fc4";
+      if (t <    0) return "#42a5f5";
+      if (t <    5) return "#26a69a";
+      if (t <   10) return "#9ccc65";
+      if (t <   15) return "#ffa726";
+      return "#ef5350";
+    }
+
+    async function loadStations() {
+      try {
+        const res      = await fetch("/api/stations");
+        const stations = await res.json();
+        stations.forEach(addStationMarker);
+        document.getElementById("map-legend-status").hidden  = true;
+        document.getElementById("map-legend-markers").hidden = false;
+      } catch (e) {
+        document.getElementById("map-legend-status").textContent = "Ekki tókst að hlaða veðurstöðvum";
+      }
+    }
+
+    function addStationMarker(s) {
+      if (s.hitastig === null || s.hitastig === undefined) return;
+      const tempStr = `${s.hitastig.toFixed(1)}°C`;
+
+      const marker = L.circleMarker([s.lat, s.lon], {
+        radius:      7,
+        fillColor:   tempColor(s.hitastig),
+        color:       "rgba(255,255,255,0.85)",
+        weight:      1.5,
+        opacity:     1,
+        fillOpacity: 0.9,
+      }).addTo(map);
+
+      marker.bindTooltip(
+        `<strong>${s.nafn}</strong><br>${tempStr}`,
+        { direction: "top", offset: [0, -8] }
+      );
+
+      marker.on("click", () => fetchWeatherByStation(s.id));
+    }
+
+    async function fetchWeatherByStation(stationId) {
+      showError(null);
+      setLoading(true);
+      try {
+        const res  = await fetch(`/api/weather_by_station?id=${stationId}`);
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Villa kom upp"); return; }
+        displayResults(data, 13);
+      } catch (_) {
+        showError("Tenging við netþjón mistókst");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── Autocomplete ──────────────────────────────────────────────────────
+    searchInput.addEventListener("input", () => {
+      clearTimeout(suggestTimeout);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { hideSugg(); return; }
+      suggestTimeout = setTimeout(() => fetchSugg(q), 220);
+    });
+
+    searchInput.addEventListener("keydown", (e) => {
+      const items = suggestionsList.querySelectorAll("li");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        activeSugg = Math.min(activeSugg + 1, items.length - 1);
+        highlightSugg(items);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        activeSugg = Math.max(activeSugg - 1, -1);
+        highlightSugg(items);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (activeSugg >= 0 && items[activeSugg]) {
+          selectSugg(items[activeSugg].textContent);
+        } else {
+          doSearch(searchInput.value.trim());
+        }
+      } else if (e.key === "Escape") {
+        hideSugg();
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".search-wrapper")) hideSugg();
+    });
+
+    function highlightSugg(items) {
+      items.forEach((li, i) => li.classList.toggle("active", i === activeSugg));
+    }
+
+    async function fetchSugg(q) {
+      try {
+        const res  = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        showSugg(data);
+      } catch (_) { hideSugg(); }
+    }
+
+    function showSugg(items) {
+      suggestionsList.innerHTML = "";
+      activeSugg = -1;
+      if (!items.length) { hideSugg(); return; }
+      items.forEach(text => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        li.setAttribute("role", "option");
+        li.addEventListener("mousedown", () => selectSugg(text));
+        suggestionsList.appendChild(li);
+      });
+      suggestionsList.hidden = false;
+    }
+
+    function selectSugg(text) {
+      searchInput.value = text;
+      hideSugg();
+      doSearch(text);
+    }
+
+    function hideSugg() {
+      suggestionsList.hidden = true;
+      suggestionsList.innerHTML = "";
+      activeSugg = -1;
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────
+    searchBtn.addEventListener("click", () => {
+      hideSugg();
+      doSearch(searchInput.value.trim());
+    });
+
+    async function doSearch(address) {
+      if (!address) return;
+      hideSugg();
+      showError(null);
+      setLoading(true);
+      try {
+        const res  = await fetch(`/api/weather?address=${encodeURIComponent(address)}`);
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || "Villa kom upp"); return; }
+        displayResults(data, 15);
+      } catch (_) {
+        showError("Tenging við netþjón mistókst");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── Display results ───────────────────────────────────────────────────
+    function fmt(val, dec = 1) {
+      return val !== null && val !== undefined ? val.toFixed(dec) : "—";
+    }
+
+    function vedurIcon(desc) {
+      if (!desc) return "🌤️";
+      const d = desc.toLowerCase();
+      if (d.includes("þrumuveður"))                          return "⛈️";
+      if (d.includes("snjókoma") || d.includes("snjóstorm")) return "❄️";
+      if (d.includes("snjóskúr") || d.includes("hagl"))      return "🌨️";
+      if (d.includes("rigning") && d.includes("skúr"))        return "🌦️";
+      if (d.includes("skúr"))                                 return "🌧️";
+      if (d.includes("rigning"))                              return "🌧️";
+      if (d.includes("þoka"))                                 return "🌫️";
+      if (d.includes("alskýjað"))                             return "☁️";
+      if (d.includes("hlýjað") || d.includes("léttskýjað"))  return "🌥️";
+      if (d.includes("lítt skýjað"))                          return "⛅";
+      if (d.includes("skýlaust") || d.includes("heiðskýrt"))  return "☀️";
+      return "🌤️";
+    }
+
+    function displayResults(data, zoom = 13) {
+      const v = data.vedur;
+
+      document.getElementById("address-label").textContent  = data.heimilisfang;
+      document.getElementById("station-name").textContent   = data.stod.nafn;
+      document.getElementById("temp").textContent           = fmt(v.hitastig);
+      document.getElementById("wind").textContent           = fmt(v.vindhradi);
+      document.getElementById("wind-dir").textContent       = v.vindaett || "—";
+      document.getElementById("vedurlag-icon").textContent  = vedurIcon(v.vedurlag);
+      document.getElementById("vedurlag").textContent       = v.vedurlag || "";
+
+      document.getElementById("raki").textContent =
+        v.raki !== null && v.raki !== undefined ? fmt(v.raki, 0) : "—";
+
+      if (v.timi) {
+        const d  = new Date(v.timi);
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        document.getElementById("time-label").textContent = `${hh}:${mm} — ${formatDate(d)}`;
+      }
+
+      // Forecast
+      const fcSection = document.getElementById("forecast-section");
+      const fcCards   = document.getElementById("forecast-cards");
+      if (data.spa && data.spa.length) {
+        fcCards.innerHTML = "";
+        data.spa.forEach(day => {
+          const card    = document.createElement("div");
+          card.className = "forecast-card";
+          const icon    = vedurIcon(day.vedurlag);
+          const tempMin = day.min_hiti !== null ? day.min_hiti.toFixed(0) : "—";
+          const tempMax = day.max_hiti !== null ? day.max_hiti.toFixed(0) : "—";
+          const wind    = day.vindhradi !== null ? day.vindhradi.toFixed(0) : "—";
+          const precip  = day.uri > 0 ? `<div class="fc-precip"><span class="fc-svg">${FC_ICON.droplet}</span> ${day.uri.toFixed(1)} mm</div>` : "";
+          card.innerHTML = `
+            <div class="fc-day">${formatDay(day.dagur)}</div>
+            <div class="fc-icon">${icon}</div>
+            <div class="fc-desc">${day.vedurlag || ""}</div>
+            <div class="fc-temp"><span class="fc-max">${tempMax}°</span> / <span class="fc-min">${tempMin}°</span></div>
+            <div class="fc-wind"><span class="fc-svg">${FC_ICON.wind}</span> ${wind} m/s</div>
+            <div class="fc-winddir"><span class="fc-svg">${FC_ICON.compass}</span> ${day.vindaett || ""}</div>
+            ${precip}
+          `;
+          fcCards.appendChild(card);
+        });
+        fcSection.hidden = false;
+      } else {
+        fcSection.hidden = true;
+      }
+
+      // Update map: zoom in and place pin
+      if (map) {
+        map.setView([data.lat, data.lon], zoom);
+        if (locationMarker) map.removeLayer(locationMarker);
+        locationMarker = L.marker([data.lat, data.lon], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div style="font-size:2rem;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))">📍</div>`,
+            iconSize: [32, 32], iconAnchor: [16, 32],
+          }),
+        }).addTo(map)
+          .bindPopup(`<strong>${data.heimilisfang}</strong>`)
+          .openPopup();
+        map.invalidateSize();
+      }
+
+      resultsDiv.hidden = false;
+      resultsDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function setLoading(on) {
+      searchBtn.disabled = on;
+      searchBtn.classList.toggle("loading", on);
+    }
+
+    function showError(msg) {
+      if (msg) {
+        errorMsg.textContent = msg;
+        errorMsg.hidden = false;
+      } else {
+        errorMsg.hidden = true;
+      }
+    }
+  </script>
+</body>
+</html>
