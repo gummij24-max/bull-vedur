@@ -36,12 +36,11 @@ header {
   gap: 0.6rem;
   margin-bottom: 0.4rem;
 }
-.logo-bull { font-size: 2.4rem; line-height: 1; }
-.logo h1 {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 8px rgba(0,0,0,.3);
+.logo-img {
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 .tagline {
   font-size: 1rem;
