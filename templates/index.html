@@ -27,6 +27,12 @@
           autocomplete="off"
           aria-label="Heimilisfang"
         />
+        <button id="clear-btn" class="clear-btn" aria-label="Hreinsa leit" hidden>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
         <button id="search-btn" aria-label="Leita">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -125,20 +131,57 @@
        &middot; Kort: <a href="https://openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a></p>
   </footer>
 
+  <!-- Textaspá modal -->
+  <div id="forecast-modal" class="fc-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fc-modal-title">
+    <div class="fc-modal-backdrop"></div>
+    <div class="fc-modal-box">
+      <div class="fc-modal-header">
+        <h2 id="fc-modal-title" class="fc-modal-title">Veðurhorfur</h2>
+        <button id="fc-modal-close" class="fc-modal-close" aria-label="Loka">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <p id="fc-modal-validity" class="fc-modal-validity"></p>
+      <div id="fc-modal-body" class="fc-modal-body"></div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // ── DOM refs ──────────────────────────────────────────────────────────
     const searchInput     = document.getElementById("search-input");
     const searchBtn       = document.getElementById("search-btn");
+    const clearBtn        = document.getElementById("clear-btn");
     const suggestionsList = document.getElementById("suggestions");
     const resultsDiv      = document.getElementById("results");
     const errorMsg        = document.getElementById("error-msg");
+    const fcModal         = document.getElementById("forecast-modal");
+    const fcModalTitle    = document.getElementById("fc-modal-title");
+    const fcModalValidity = document.getElementById("fc-modal-validity");
+    const fcModalBody     = document.getElementById("fc-modal-body");
+    const fcModalClose    = document.getElementById("fc-modal-close");
 
     // ── State ─────────────────────────────────────────────────────────────
     let map            = null;
     let locationMarker = null;
     let suggestTimeout = null;
     let activeSugg     = -1;
+    let fcTextCache    = null;
+
+    // ── Clear (X) button ──────────────────────────────────────────────────
+    function updateClearBtn() {
+      clearBtn.hidden = searchInput.value.length === 0;
+    }
+    searchInput.addEventListener("input", updateClearBtn);
+    clearBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearBtn.hidden = true;
+      hideSugg();
+      searchInput.focus();
+    });
 
     // ── SVG icons (Lucide paths, reused in forecast cards) ────────────────
     const _s = (body) =>
@@ -405,7 +448,9 @@
         fcCards.innerHTML = "";
         data.spa.forEach(day => {
           const card    = document.createElement("div");
-          card.className = "forecast-card";
+          card.className = "forecast-card fc-clickable";
+          card.title    = "Smelltu fyrir textaspá";
+          card.addEventListener("click", showForecastText);
           const icon    = vedurIcon(day.vedurlag);
           const tempMin = day.min_hiti !== null ? day.min_hiti.toFixed(0) : "—";
           const tempMax = day.max_hiti !== null ? day.max_hiti.toFixed(0) : "—";
@@ -445,6 +490,58 @@
 
       resultsDiv.hidden = false;
       resultsDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // ── Forecast text modal ───────────────────────────────────────────────
+    function openFcModal() {
+      fcModal.hidden = false;
+      document.body.style.overflow = "hidden";
+      fcModalClose.focus();
+    }
+    function closeFcModal() {
+      fcModal.hidden = true;
+      document.body.style.overflow = "";
+    }
+    fcModalClose.addEventListener("click", closeFcModal);
+    fcModal.querySelector(".fc-modal-backdrop").addEventListener("click", closeFcModal);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !fcModal.hidden) closeFcModal();
+    });
+
+    async function showForecastText() {
+      fcModalTitle.textContent = "Sæki veðurhorfur…";
+      fcModalValidity.textContent = "";
+      fcModalBody.textContent = "";
+      openFcModal();
+
+      if (fcTextCache) {
+        renderFcModal(fcTextCache);
+        return;
+      }
+      try {
+        const res  = await fetch("/api/forecast_text");
+        const data = await res.json();
+        if (!res.ok) { fcModalBody.textContent = data.error || "Villa"; return; }
+        fcTextCache = data;
+        renderFcModal(data);
+      } catch (_) {
+        fcModalBody.textContent = "Tenging mistókst";
+      }
+    }
+
+    function renderFcModal(data) {
+      fcModalTitle.textContent = data.titill || "Veðurhorfur";
+      if (data.gilt_fra && data.gilt_til) {
+        const fra = data.gilt_fra.slice(0, 10);
+        const til = data.gilt_til.slice(0, 10);
+        fcModalValidity.textContent = `Gilt: ${fra} – ${til}`;
+      }
+      // Split on sentence endings for readability
+      const text = data.efni || "";
+      fcModalBody.innerHTML = text
+        .split(/(?<=\.) (?=[A-ZÁÉÍÓÚÝÐÞÆÖ])/)
+        .map(s => `<p>${s}</p>`)
+        .join("");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

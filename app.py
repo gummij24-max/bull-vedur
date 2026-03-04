@@ -5,6 +5,7 @@ from iceweather import (
     observation_for_closest, forecast_for_closest,
     observation_for_stations, observation_for_station,
     forecast_for_station, station_list, station_for_id,
+    forecast_text,
 )
 from collections import defaultdict
 
@@ -240,6 +241,25 @@ def weather_by_station():
         stod_nafn=s["name"], stod_lat=s["lat"], stod_lon=s["lon"],
         data=obs["results"][0], spa=spa,
     ))
+
+
+@app.route("/api/forecast_text")
+def forecast_text_endpoint():
+    try:
+        data = forecast_text(5)
+        results = data.get("results", [])
+        if not results:
+            return jsonify({"error": "Engin textaspá til"}), 404
+        r = results[0]
+        return jsonify({
+            "titill":    r.get("title", ""),
+            "efni":      r.get("content", ""),
+            "gilt_fra":  r.get("valid_from", ""),
+            "gilt_til":  r.get("valid_to", ""),
+            "buid_til":  r.get("creation", ""),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 503
 
 
 if __name__ == "__main__":

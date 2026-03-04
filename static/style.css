@@ -83,6 +83,22 @@ main {
 }
 #search-input::placeholder { color: #aab4c4; }
 
+/* ── Clear button ── */
+.clear-btn {
+  background: transparent;
+  border: none;
+  color: #aab4c4;
+  padding: 0 .6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s;
+  flex-shrink: 0;
+}
+.clear-btn:hover { color: var(--blue-dark); }
+.clear-btn svg { width: 18px; height: 18px; }
+
 #search-btn {
   background: var(--blue-light);
   border: none;
@@ -387,6 +403,88 @@ main {
   border: 1.5px solid rgba(255,255,255,.6);
   vertical-align: middle;
 }
+
+/* ── Clickable forecast card ── */
+.fc-clickable {
+  cursor: pointer;
+}
+.fc-clickable:hover {
+  background: rgba(255,255,255,.22);
+  transform: translateY(-2px);
+  transition: background .2s, transform .15s;
+}
+
+/* ===== Forecast text modal ===== */
+.fc-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.fc-modal[hidden] { display: none; }
+.fc-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5,20,45,.7);
+  backdrop-filter: blur(4px);
+}
+.fc-modal-box {
+  position: relative;
+  background: var(--white);
+  color: var(--blue-dark);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 40px rgba(0,0,0,.35);
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.2rem 1.4rem 1rem;
+  border-bottom: 1px solid var(--gray-border);
+  flex-shrink: 0;
+}
+.fc-modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+.fc-modal-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--gray-text);
+  display: flex;
+  align-items: center;
+  padding: .2rem;
+  border-radius: 6px;
+  transition: background .15s, color .15s;
+}
+.fc-modal-close:hover { background: var(--gray-light); color: var(--blue-dark); }
+.fc-modal-close svg { width: 20px; height: 20px; }
+.fc-modal-validity {
+  font-size: .78rem;
+  color: var(--gray-text);
+  padding: .5rem 1.4rem 0;
+  flex-shrink: 0;
+}
+.fc-modal-body {
+  padding: .9rem 1.4rem 1.4rem;
+  overflow-y: auto;
+  font-size: .95rem;
+  line-height: 1.65;
+  color: #2a3a52;
+}
+.fc-modal-body p { margin-bottom: .6rem; }
+.fc-modal-body p:last-child { margin-bottom: 0; }
 
 /* ===== Footer ===== */
 footer {
