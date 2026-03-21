@@ -8,6 +8,8 @@ from iceweather import (
     forecast_text,
 )
 from collections import defaultdict
+import requests as req_lib
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -201,13 +203,15 @@ def weather():
     except Exception:
         spa = []
 
-    return jsonify(build_weather_payload(
+    payload = build_weather_payload(
         label=format_addr(loc),
         lat=lat, lon=lon,
         stod_nafn=station.get("name", "Óþekkt stöð"),
         stod_lat=station.get("lat"), stod_lon=station.get("lon"),
         data=obs["results"][0], spa=spa,
-    ))
+    )
+    payload["landnr"] = loc.get("landnr")
+    return jsonify(payload)
 
 
 @app.route("/api/weather_by_station")
@@ -241,6 +245,176 @@ def weather_by_station():
         stod_nafn=s["name"], stod_lat=s["lat"], stod_lon=s["lon"],
         data=obs["results"][0], spa=spa,
     ))
+
+
+_PROPERTY_SESSION = None
+
+def _get_req_session():
+    global _PROPERTY_SESSION
+    if _PROPERTY_SESSION is None:
+        _PROPERTY_SESSION = req_lib.Session()
+        _PROPERTY_SESSION.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/121.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "is-IS,is;q=0.9,en;q=0.8",
+        })
+    return _PROPERTY_SESSION
+
+
+def _fetch_land_info(landnr):
+    """Sækja landupplýsingar úr geo.fasteignaskra.is WFS þjónustu."""
+    wfs_url = "https://geo.fasteignaskra.is/ws/geoserver/wfs"
+    xml_filter = (
+        "<Filter xmlns='http://www.opengis.net/ogc'>"
+        "<PropertyIsEqualTo>"
+        "<PropertyName>fasteignaskra:LANDEIGN_NR</PropertyName>"
+        f"<Literal>{landnr}</Literal>"
+        "</PropertyIsEqualTo>"
+        "</Filter>"
+    )
+    params = {
+        "service": "WFS",
+        "version": "1.1.0",
+        "request": "GetFeature",
+        "typename": "fasteignaskra:MV_LANDEIGNASKRA",
+        "outputFormat": "application/json",
+        "srsname": "EPSG:4326",
+        "filter": xml_filter,
+    }
+    r = req_lib.get(wfs_url, params=params, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    features = data.get("features", [])
+    if not features:
+        return {}
+    props = features[0].get("properties", {})
+    return {
+        "staerd": props.get("LANDEIGN_SKRAD_STAERD"),
+        "landeign_gerd": props.get("LANDEIGN_GERD"),
+    }
+
+
+def _fetch_address_count(landnr):
+    """Sækja fjölda staðfanga (íbúða) á landnúmeri úr WFS."""
+    wfs_url = "https://geo.fasteignaskra.is/ws/geoserver/wfs"
+    xml_filter = (
+        "<Filter xmlns='http://www.opengis.net/ogc'>"
+        "<PropertyIsEqualTo>"
+        "<PropertyName>fasteignaskra:LANDNR</PropertyName>"
+        f"<Literal>{landnr}</Literal>"
+        "</PropertyIsEqualTo>"
+        "</Filter>"
+    )
+    params = {
+        "service": "WFS",
+        "version": "1.1.0",
+        "request": "GetFeature",
+        "typename": "fasteignaskra:VSTADF_ALLT",
+        "outputFormat": "application/json",
+        "filter": xml_filter,
+    }
+    r = req_lib.get(wfs_url, params=params, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    return data.get("totalFeatures", 0)
+
+
+def _parse_amount(text):
+    """Þátta krónutölu úr texta eins og '12.345.678 kr.'"""
+    if not text:
+        return None
+    cleaned = text.replace(".", "").replace(",", "").replace("kr", "").replace(".", "").strip()
+    import re
+    m = re.search(r"\d+", cleaned)
+    return int(m.group(0)) if m else None
+
+
+def _scrape_hms_property(landnr):
+    """Reyna að skrapa fasteignaupplýsingar af hms.is/fasteignaskra."""
+    session = _get_req_session()
+    urls_to_try = [
+        f"https://hms.is/fasteignaskra/?landnr={landnr}",
+        f"https://hms.is/fasteignaskra/?leit={landnr}",
+        f"https://fasteignaskra.is/{landnr}/",
+    ]
+    for url in urls_to_try:
+        try:
+            r = session.get(url, timeout=12, allow_redirects=True)
+            if r.status_code != 200:
+                continue
+            soup = BeautifulSoup(r.text, "lxml")
+            result = {}
+            # Look for fasteignamat in the page
+            import re
+            full_text = soup.get_text(" ", strip=True)
+            # Try to find fasteignamat value
+            fm_match = re.search(
+                r"[Ff]asteignamat[^0-9]*([0-9][0-9.,\s]+)\s*kr",
+                full_text
+            )
+            if fm_match:
+                result["fasteignamat"] = _parse_amount(fm_match.group(1))
+            # Try brunabótamat
+            bb_match = re.search(
+                r"[Bb]runab[oó]tamat[^0-9]*([0-9][0-9.,\s]+)\s*kr",
+                full_text
+            )
+            if bb_match:
+                result["brunabotamat"] = _parse_amount(bb_match.group(1))
+            # Construction year
+            ar_match = re.search(r"[Bb]yggingarár[^0-9]*(1[89]\d\d|2[01]\d\d)", full_text)
+            if ar_match:
+                result["bygg_ar"] = int(ar_match.group(1))
+            # Usage type
+            not_match = re.search(r"[Nn]otkun[:\s]+([^\n\.]{3,60})", full_text)
+            if not_match:
+                result["notkun"] = not_match.group(1).strip()
+            if result:
+                return result
+        except Exception:
+            continue
+    return {}
+
+
+@app.route("/api/property")
+def property_info():
+    """Sækja fasteignaupplýsingar fyrir landnúmer."""
+    try:
+        landnr_raw = request.args.get("landnr", "").strip()
+        if not landnr_raw:
+            return jsonify({"error": "Ekkert landnúmer gefið upp"}), 400
+        landnr = int(landnr_raw)
+    except ValueError:
+        return jsonify({"error": "Ógilt landnúmer"}), 400
+
+    result = {"landnr": landnr}
+
+    # 1. Sækja grunnupplýsingar úr WFS (virkar alltaf)
+    try:
+        land_info = _fetch_land_info(landnr)
+        result.update(land_info)
+    except Exception:
+        pass
+
+    # 2. Sækja fjölda staðfanga/eigna
+    try:
+        fjoldi = _fetch_address_count(landnr)
+        result["fjoldi_eigna"] = fjoldi if fjoldi > 0 else None
+    except Exception:
+        pass
+
+    # 3. Reyna að sækja fasteignamat af hms.is (kann að mistakast)
+    try:
+        hms_data = _scrape_hms_property(landnr)
+        result.update(hms_data)
+    except Exception:
+        pass
+
+    return jsonify(result)
 
 
 @app.route("/api/forecast_text")

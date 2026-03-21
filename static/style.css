@@ -486,6 +486,58 @@ main {
 .fc-modal-body p { margin-bottom: .6rem; }
 .fc-modal-body p:last-child { margin-bottom: 0; }
 
+/* ===== Property info ===== */
+.property-section { /* intentionally minimal wrapper */ }
+
+.property-card {
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  backdrop-filter: blur(4px);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+}
+
+.property-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: .8rem;
+}
+
+.prop-item {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 10px;
+  padding: .9rem .8rem;
+  text-align: center;
+  color: var(--white);
+}
+
+.prop-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: .4rem;
+  color: rgba(255,255,255,.8);
+}
+.prop-icon svg { width: 26px; height: 26px; }
+
+.prop-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.2;
+  margin-bottom: .25rem;
+  word-break: break-word;
+}
+
+.prop-label {
+  font-size: .7rem;
+  color: rgba(255,255,255,.6);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 600;
+}
+
 /* ===== Footer ===== */
 footer {
   text-align: center;
