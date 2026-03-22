@@ -210,7 +210,7 @@
 
   <header class="score-hero">
     <div class="logo">
-      <img src="{{ url_for('static', filename='Bull.is.logo.1.png') }}" alt="Bull-Veður" class="logo-img" />
+      <a href="/"><img src="{{ url_for('static', filename='Bull.is.logo.1.png') }}" alt="Bull-Veður" class="logo-img" /></a>
     </div>
     <h1>Veðurfarsskor eftir póstnúmeri</h1>
     <p>Samanburður byggður á hitastigi, vindhraða og úrkomu — 40% / 35% / 25%</p>
@@ -365,7 +365,7 @@
     const tbody    = document.getElementById("score-tbody");
     const allRows  = Array.from(tbody.querySelectorAll("tr"));
     let sortCol    = null;
-    let sortAsc    = true;
+    let sortAsc    = false;
 
     const colIndex = {};
     document.querySelectorAll("thead th").forEach((th, i) => {
@@ -411,8 +411,8 @@
     });
 
     // Mark initial sort and apply it
-    document.querySelector('thead th[data-col="vedursverd"]').classList.add("sort-asc");
-    sortTable("vedursverd");
+    document.querySelector('thead th[data-col="skor"]').classList.add("sort-desc");
+    sortTable("skor");
 
     // ── Leit ─────────────────────────────────────────────────────────────────
     function visibleRows() {
