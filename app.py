@@ -223,6 +223,7 @@ def weather():
         data=obs["results"][0], spa=spa,
     )
     payload["landnr"] = loc.get("landnr")
+    payload["postnr"] = loc.get("postnr")
     return jsonify(payload)
 
 
@@ -446,6 +447,46 @@ def forecast_text_endpoint():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 503
+
+
+_scores_cache = None
+
+def _load_scores():
+    global _scores_cache
+    if _scores_cache is None:
+        import os, json as _j
+        p = os.path.join(os.path.dirname(__file__), "static", "scores.json")
+        with open(p, encoding="utf-8") as f:
+            _scores_cache = _j.load(f)
+    return _scores_cache
+
+
+@app.route("/api/score")
+def score_api():
+    try:
+        pn = int(request.args.get("postnr", "").strip())
+    except ValueError:
+        return jsonify({"error": "Ógilt póstnúmer"}), 400
+
+    data   = _load_scores()
+    scores = {s["postnr"]: s for s in data.get("scores", [])}
+    fb_map = data.get("fallback", {})
+
+    if pn in scores:
+        return jsonify({"score": scores[pn], "fallback": False})
+
+    fb = fb_map.get(pn) or fb_map.get(str(pn))
+    if fb:
+        fb_pn = fb["postnr_fallback"]
+        if fb_pn in scores:
+            return jsonify({
+                "score":    scores[fb_pn],
+                "fallback": True,
+                "fallback_dist_km": fb["dist_km"],
+                "original_postnr":  pn,
+            })
+
+    return jsonify({"error": "Ekkert skor fundið"}), 404
 
 
 @app.route("/score")

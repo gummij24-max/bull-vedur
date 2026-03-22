@@ -21,7 +21,10 @@ OUTPUT_PATH     = "static/scores.json"
 
 # Nota sölu frá þessum árum
 YEARS_INCLUDE   = {"2022", "2023", "2024", "2025"}
-MIN_SALES       = 10      # Lágmark fjöldi samninga í póstnúmeri
+MIN_SALES       = 4       # Lágmark fjöldi samninga í póstnúmeri
+
+# Aðeins íbúðarhúsnæði
+IBUDATEGUND = {"Fjölbýli", "Einbýli", "Sérbýli", "Raðhús", "Parhús"}
 
 # ── Haul kaupskrá ─────────────────────────────────────────────────────────────
 print("Les kaupskrá…")
@@ -30,6 +33,9 @@ pn_sales = defaultdict(list)   # postnr -> list of (price_per_m2)
 with open(KAUPSKRA_PATH, encoding="iso-8859-1") as f:
     reader = csv.DictReader(f, delimiter=";")
     for row in reader:
+        # Aðeins íbúðarhúsnæði
+        if row.get("TEGUND", "").strip() not in IBUDATEGUND:
+            continue
         # Sía út ógilda samninga
         if row.get("ONOTHAEFUR_SAMNINGUR", "").strip() == "1":
             continue
@@ -296,6 +302,55 @@ scored.sort(key=lambda x: x["skor"], reverse=True)
 for rank, rec in enumerate(scored, 1):
     rec["rod"] = rank
 
+# ── Fallback: póstnúmer án gagna → næsta póstnúmer með skor ──────────────────
+# Sækja hnit fyrir öll póstnúmer í iceaddr (líka þau sem hafa ekki gögn)
+print("Reikna fallback-vörpun fyrir póstnúmer án gagna…")
+scored_pn = {rec["postnr"]: rec for rec in scored}
+
+# Búa til lookup: öll gild póstnúmer með hnit
+all_pn_coords = {}
+for pn_str, coords in pn_coords.items():
+    try:
+        all_pn_coords[int(pn_str)] = coords
+    except ValueError:
+        pass
+
+# Finna öll póstnúmer í POSTCODES sem eru ekki í scored
+fallback_map = {}   # postnr_without_score -> nearest postnr with score
+for pn_int, info in POSTCODES.items():
+    if pn_int in scored_pn:
+        continue
+    coords = all_pn_coords.get(pn_int)
+    if not coords:
+        # Reyna að sækja úr iceaddr
+        try:
+            cur = conn.execute(
+                "SELECT AVG(lat_wgs84) as lat, AVG(long_wgs84) as lon FROM stadfong "
+                "WHERE postnr=? AND lat_wgs84 IS NOT NULL", (str(pn_int),)
+            )
+            row2 = cur.fetchone()
+            if row2 and row2["lat"]:
+                coords = (row2["lat"], row2["lon"])
+        except Exception:
+            pass
+    if not coords:
+        continue
+    lat, lon = coords
+    best_dist = float("inf")
+    best_pn   = None
+    for sp in scored:
+        dist = haversine(lat, lon, sp["lat"], sp["lon"])
+        if dist < best_dist:
+            best_dist = dist
+            best_pn   = sp["postnr"]
+    if best_pn is not None:
+        fallback_map[pn_int] = {
+            "postnr_fallback": best_pn,
+            "dist_km": round(best_dist, 1),
+        }
+
+print(f"  {len(fallback_map)} fallback-varpanir búnar til")
+
 # ── Vista ─────────────────────────────────────────────────────────────────────
 output = {
     "updated":     __import__("datetime").date.today().isoformat(),
@@ -306,7 +361,8 @@ output = {
         "f":      W_WIND,
         "r":      W_RAIN,
     },
-    "scores": scored,
+    "scores":   scored,
+    "fallback": fallback_map,
 }
 
 with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
