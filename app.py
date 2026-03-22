@@ -13,6 +13,18 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
+@app.template_filter("score_color")
+def score_color(s):
+    try:
+        s = float(s)
+    except (TypeError, ValueError):
+        return "#aab4c4"
+    if s >= 70: return "#2ecc71"
+    if s >= 60: return "#52d68a"
+    if s >= 50: return "#f0a500"
+    if s >= 40: return "#e67e22"
+    return "#e74c3c"
+
 VINDAETT_FULL = {
     "N":   "Norðanátt",
     "NNA": "Nor-norðaustanátt",
@@ -434,6 +446,20 @@ def forecast_text_endpoint():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 503
+
+
+@app.route("/score")
+def score_page():
+    import os, json as _json
+    path = os.path.join(os.path.dirname(__file__), "static", "scores.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+        scores = data.get("scores", [])
+        updated = data.get("updated", "")
+    except Exception:
+        scores, updated = [], ""
+    return render_template("score.html", scores=scores, updated=updated)
 
 
 if __name__ == "__main__":
