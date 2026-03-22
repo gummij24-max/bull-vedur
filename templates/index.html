@@ -14,7 +14,7 @@
       <img src="{{ url_for('static', filename='Bull.is.logo.1.png') }}" alt="Bull-Veður" class="logo-img" />
     </div>
     <p class="tagline">Sláðu inn heimilisfang eða smelltu á veðurstöð á kortinu</p>
-    <a href="/score" class="score-link">📊 Lífsgæðaskor eftir póstnúmeri</a>
+    <a href="/score" class="score-link">📊 Veðurfarsskor eftir póstnúmeri</a>
   </header>
 
   <main>
@@ -118,9 +118,9 @@
         </div>
       </div>
 
-      <!-- Lífsgæðaskor -->
+      <!-- Veðurfarsskor -->
       <div id="score-section" hidden>
-        <h3 class="section-title">Lífsgæðaskor svæðisins</h3>
+        <h3 class="section-title">Veðurfarsskor svæðisins</h3>
         <div class="score-panel">
           <div class="score-panel-top">
             <div class="score-circle-wrap">
@@ -141,6 +141,11 @@
             </div>
           </div>
           <div class="score-breakdown" id="score-breakdown"></div>
+          <div id="score-vedursverd" class="score-vedursverd" hidden>
+            <span class="vedursverd-label">Veðurverð:</span>
+            <span id="vedursverd-num" class="vedursverd-num"></span>
+            <div id="vedursverd-desc" class="vedursverd-desc"></div>
+          </div>
         </div>
       </div>
 
@@ -531,11 +536,6 @@
       return "#e74c3c";
     }
 
-    function fmtFmverd(n) {
-      if (n == null) return "—";
-      return Math.round(n).toLocaleString("is-IS") + " kr/m²";
-    }
-
     function buildScoreBar(label, value, normScore, weight) {
       if (normScore == null) return "";
       const color = scoreColor(normScore);
@@ -592,10 +592,22 @@
         // Sundurliðun
         const bd = document.getElementById("score-breakdown");
         bd.innerHTML =
-          buildScoreBar("Fermetraverð", fmtFmverd(s.fmverd), s.norm_fmverd, 0.40) +
-          buildScoreBar("Meðalhitastig", s.t != null ? s.t.toFixed(1) + " °C" : "—", s.norm_t, 0.25) +
-          buildScoreBar("Meðalvindhraði", s.f != null ? s.f.toFixed(1) + " m/s" : "—", s.norm_f, 0.20) +
-          buildScoreBar("Meðalúrkoma", s.r != null ? Math.round(s.r) + " mm/ár" : "—", s.norm_r, 0.15);
+          buildScoreBar("Meðalhitastig", s.t != null ? s.t.toFixed(1) + " °C" : "—", s.norm_t, 0.40) +
+          buildScoreBar("Meðalvindhraði", s.f != null ? s.f.toFixed(1) + " m/s" : "—", s.norm_f, 0.35) +
+          buildScoreBar("Meðalúrkoma", s.r != null ? Math.round(s.r) + " mm/ár" : "—", s.norm_r, 0.25);
+
+        // Veðurverð
+        const vvDiv = document.getElementById("score-vedursverd");
+        if (s.vedursverd && s.fmverd) {
+          const fmStr = Math.round(s.fmverd).toLocaleString("is-IS");
+          const vvStr = Math.round(s.vedursverd).toLocaleString("is-IS");
+          document.getElementById("vedursverd-num").textContent = vvStr + " kr/stig";
+          document.getElementById("vedursverd-desc").textContent =
+            fmStr + " kr/m² ÷ Veðurfarsskor " + Math.round(skor) + " = " + vvStr + " kr/stig";
+          vvDiv.hidden = false;
+        } else {
+          vvDiv.hidden = true;
+        }
 
         section.hidden = false;
       } catch (_) {

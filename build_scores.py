@@ -1,9 +1,10 @@
 """
-Reiknar lífsgæðaskor fyrir hvert póstnúmer:
-  40% fermetraverð (lægra = betra)
-  25% meðalhitastig (hærra = betra)
-  20% meðalvindhraði (lægri = betra)
-  15% meðalúrkoma (minni = betra)
+Reiknar veðurfarsskor fyrir hvert póstnúmer:
+  40% meðalhitastig (hærra = betra)
+  35% meðalvindhraði (lægri = betra)
+  25% meðalúrkoma (minni = betra)
+
+Reiknar einnig veðurverð = fermetraverð / veðurfarsskor (lægra = betra deal).
 
 Keyra: python3 build_scores.py
 Skilar: static/scores.json
@@ -252,49 +253,45 @@ def normalize_inverse(values, low_is_good=True):
     return result
 
 # Safna gildum til normalíseringar
-fmverd_vals = [r["fmverd"] for r in records]
-t_vals      = [r["t"]      for r in records]
-f_vals      = [r["f"]      for r in records]
-r_vals      = [r["r"]      for r in records]
+t_vals = [r["t"] for r in records]
+f_vals = [r["f"] for r in records]
+r_vals = [r["r"] for r in records]
 
-fmverd_norm = normalize_inverse(fmverd_vals, low_is_good=True)   # lægra = betra
-t_norm      = normalize_inverse(t_vals,      low_is_good=False)   # hærra = betra
-f_norm      = normalize_inverse(f_vals,      low_is_good=True)    # lægra = betra
-r_norm      = normalize_inverse(r_vals,      low_is_good=True)    # minni = betra
+t_norm = normalize_inverse(t_vals, low_is_good=False)   # hærra = betra
+f_norm = normalize_inverse(f_vals, low_is_good=True)    # lægra = betra
+r_norm = normalize_inverse(r_vals, low_is_good=True)    # minni = betra
 
-W_FMVERD = 0.40
-W_TEMP   = 0.25
-W_WIND   = 0.20
-W_RAIN   = 0.15
+W_TEMP = 0.40
+W_WIND = 0.35
+W_RAIN = 0.25
 
 scored = []
 for i, rec in enumerate(records):
     components = {
-        "fmverd": fmverd_norm[i],
-        "t":      t_norm[i],
-        "f":      f_norm[i],
-        "r":      r_norm[i],
+        "t": t_norm[i],
+        "f": f_norm[i],
+        "r": r_norm[i],
     }
-    # Ef loftlagsgögn vantar: reikna bara af þeim sem til eru
-    weights_used = {"fmverd": W_FMVERD}
-    remaining    = 1 - W_FMVERD
     climate_keys = [("t", W_TEMP), ("f", W_WIND), ("r", W_RAIN)]
     available    = [(k, w) for k, w in climate_keys if components[k] is not None]
-    if available:
-        total_w  = sum(w for _, w in available)
-        for k, w in available:
-            weights_used[k] = w / total_w * remaining
+    if not available:
+        continue
+    total_w      = sum(w for _, w in available)
+    weights_used = {k: w / total_w for k, w in available}
 
-    skor = sum(components[k] * w for k, w in weights_used.items() if components[k] is not None)
+    skor = sum(components[k] * w for k, w in weights_used.items())
     skor = round(skor, 1)
+
+    fmverd = rec["fmverd"]
+    vedursverd = round(fmverd / skor) if skor > 0 else None
 
     scored.append({
         **rec,
         "skor":       skor,
-        "norm_fmverd": round(fmverd_norm[i], 1) if fmverd_norm[i] is not None else None,
-        "norm_t":      round(t_norm[i],      1) if t_norm[i]      is not None else None,
-        "norm_f":      round(f_norm[i],      1) if f_norm[i]      is not None else None,
-        "norm_r":      round(r_norm[i],      1) if r_norm[i]      is not None else None,
+        "vedursverd": vedursverd,
+        "norm_t":     round(t_norm[i], 1) if t_norm[i] is not None else None,
+        "norm_f":     round(f_norm[i], 1) if f_norm[i] is not None else None,
+        "norm_r":     round(r_norm[i], 1) if r_norm[i] is not None else None,
     })
 
 # Raða eftir skori
@@ -356,10 +353,9 @@ output = {
     "updated":     __import__("datetime").date.today().isoformat(),
     "years":       sorted(YEARS_INCLUDE),
     "weights": {
-        "fmverd": W_FMVERD,
-        "t":      W_TEMP,
-        "f":      W_WIND,
-        "r":      W_RAIN,
+        "t": W_TEMP,
+        "f": W_WIND,
+        "r": W_RAIN,
     },
     "scores":   scored,
     "fallback": fallback_map,
@@ -370,12 +366,13 @@ with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
 
 print(f"\nVistað í {OUTPUT_PATH}")
 print(f"Fjöldi póstnúmera: {len(scored)}")
-print("\nTop 10:")
+print("\nTop 10 (veðurfarsskor):")
 for r in scored[:10]:
+    vv = r['vedursverd']
     print(f"  #{r['rod']:3} {r['postnr']} {r['stadur']:20} skor={r['skor']:5.1f}  "
-          f"fm={r['fmverd']/1000:.0f}k/m²  t={r['t']}°C  f={r['f']}m/s  r={r['r']}mm")
+          f"vedursverd={vv}  fm={r['fmverd']/1000:.0f}k/m²  t={r['t']}°C  f={r['f']}m/s  r={r['r']}mm")
 
-print("\nNeðst 5:")
-for r in scored[-5:]:
-    print(f"  #{r['rod']:3} {r['postnr']} {r['stadur']:20} skor={r['skor']:5.1f}  "
-          f"fm={r['fmverd']/1000:.0f}k/m²  t={r['t']}°C  f={r['f']}m/s  r={r['r']}mm")
+print("\nBest veðurverð (lægst):")
+by_vv = sorted([r for r in scored if r['vedursverd']], key=lambda x: x['vedursverd'])
+for r in by_vv[:5]:
+    print(f"  {r['postnr']} {r['stadur']:20} skor={r['skor']:5.1f}  vedursverd={r['vedursverd']:,}")

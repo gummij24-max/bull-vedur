@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lífsgæðaskor – Bull-Veður</title>
+  <title>Veðurfarsskor – Bull-Veður</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -212,8 +212,8 @@
     <div class="logo">
       <img src="{{ url_for('static', filename='Bull.is.logo.1.png') }}" alt="Bull-Veður" class="logo-img" />
     </div>
-    <h1>Lífsgæðaskor eftir póstnúmeri</h1>
-    <p>Samanburður byggður á fermetraverði, hitastigi, vindhraða og úrkomu</p>
+    <h1>Veðurfarsskor eftir póstnúmeri</h1>
+    <p>Samanburður byggður á hitastigi, vindhraða og úrkomu — 40% / 35% / 25%</p>
   </header>
 
   <div class="score-main">
@@ -247,23 +247,25 @@
         <table id="score-table">
           <thead>
             <tr>
-              <th data-col="rod"        data-type="num">#</th>
-              <th data-col="postnr"     data-type="num">Póst­nr</th>
-              <th data-col="stadur"     data-type="str">Staður</th>
-              <th data-col="lysing"     data-type="str">Hverfi</th>
-              <th data-col="skor"       data-type="num">Skor</th>
-              <th data-col="fmverd"     data-type="num">kr./m²</th>
-              <th data-col="t"          data-type="num">Hiti °C</th>
-              <th data-col="f"          data-type="num">Vindur m/s</th>
-              <th data-col="r"          data-type="num">Úrkoma mm</th>
-              <th data-col="stod_nafn"  data-type="str">Veðurstöð</th>
+              <th data-col="rod"         data-type="num">#</th>
+              <th data-col="postnr"      data-type="num">Póst­nr</th>
+              <th data-col="stadur"      data-type="str">Staður</th>
+              <th data-col="lysing"      data-type="str">Hverfi</th>
+              <th data-col="skor"        data-type="num">Veðurfarsskor</th>
+              <th data-col="vedursverd"  data-type="num">Veðurverð kr/stig ↑</th>
+              <th data-col="fmverd"      data-type="num">kr./m²</th>
+              <th data-col="t"           data-type="num">Hiti °C</th>
+              <th data-col="f"           data-type="num">Vindur m/s</th>
+              <th data-col="r"           data-type="num">Úrkoma mm</th>
+              <th data-col="stod_nafn"   data-type="str">Veðurstöð</th>
             </tr>
           </thead>
           <tbody id="score-tbody">
             {% for s in scores %}
             <tr data-postnr="{{ s.postnr }}"
                 data-lat="{{ s.lat }}" data-lon="{{ s.lon }}"
-                data-skor="{{ s.skor }}">
+                data-skor="{{ s.skor }}"
+                data-vedursverd="{{ s.vedursverd or '' }}">
               <td class="td-rank">{{ s.rod }}</td>
               <td><strong>{{ s.postnr }}</strong></td>
               <td class="wide">{{ s.stadur }}</td>
@@ -276,6 +278,7 @@
                   </div>
                 </div>
               </td>
+              <td class="td-price">{% if s.vedursverd %}{{ '{:,.0f}'.format(s.vedursverd).replace(',', '.') }}{% else %}<span class="td-null">—</span>{% endif %}</td>
               <td class="td-price">{{ '{:,.0f}'.format(s.fmverd).replace(',', '.') }} kr.</td>
               <td class="td-clim">{% if s.t is not none %}{{ '%.1f'|format(s.t) }}{% else %}<span class="td-null">—</span>{% endif %}</td>
               <td class="td-clim">{% if s.f is not none %}{{ '%.1f'|format(s.f) }}{% else %}<span class="td-null">—</span>{% endif %}</td>
@@ -296,7 +299,8 @@
     </div>
 
     <p style="font-size:.75rem;color:rgba(255,255,255,.4);margin-top:1rem;text-align:center">
-      Skor = 40% fermetraverð + 25% meðalhitastig + 20% meðalvindhraði + 15% meðalúrkoma (2022–2025).
+      Veðurfarsskor = 40% meðalhitastig + 35% meðalvindhraði + 25% meðalúrkoma (2022–2025).
+      Veðurverð = meðalfermetraverð ÷ veðurfarsskor — lægra þýðir betra deal.
       Loftlagsgögn frá Veðurstofu Íslands (10 ára meðaltöl). Kaupverð úr kaupskrá HMS.
     </p>
   </div>
@@ -334,9 +338,10 @@
       const pn    = row.dataset.postnr;
       if (isNaN(lat) || isNaN(lon)) return;
 
-      const tds   = row.querySelectorAll("td");
-      const stadur = tds[2]?.textContent.trim() || "";
-      const lysing = tds[3]?.textContent.trim() || "";
+      const tds      = row.querySelectorAll("td");
+      const stadur   = tds[2]?.textContent.trim() || "";
+      const lysing   = tds[3]?.textContent.trim() || "";
+      const vedursverd = row.dataset.vedursverd ? parseInt(row.dataset.vedursverd).toLocaleString("is-IS") + " kr/stig" : "—";
 
       L.circleMarker([lat, lon], {
         radius:      8,
@@ -346,7 +351,7 @@
         fillOpacity: 0.88,
       }).addTo(map)
         .bindTooltip(
-          `<strong>${pn} ${stadur}</strong>${lysing ? "<br><small>" + lysing + "</small>" : ""}<br>Skor: <strong>${skor.toFixed(1)}</strong>`,
+          `<strong>${pn} ${stadur}</strong>${lysing ? "<br><small>" + lysing + "</small>" : ""}<br>Veðurfarsskor: <strong>${skor.toFixed(1)}</strong><br>Veðurverð: <strong>${vedursverd}</strong>`,
           { direction: "top", offset: [0, -8] }
         )
         .on("click", () => {
@@ -359,7 +364,7 @@
     // ── Töfluröðun ────────────────────────────────────────────────────────────
     const tbody    = document.getElementById("score-tbody");
     const allRows  = Array.from(tbody.querySelectorAll("tr"));
-    let sortCol    = "rod";
+    let sortCol    = null;
     let sortAsc    = true;
 
     const colIndex = {};
@@ -383,7 +388,7 @@
         sortAsc = !sortAsc;
       } else {
         sortCol = col;
-        sortAsc = col === "rod";  // default ascending for rank
+        sortAsc = col !== "skor";  // ascending by default except score (higher=better)
       }
       document.querySelectorAll("thead th").forEach(th => {
         th.classList.remove("sort-asc", "sort-desc");
@@ -405,8 +410,9 @@
       th.addEventListener("click", () => sortTable(th.dataset.col));
     });
 
-    // Mark initial sort
-    document.querySelector('thead th[data-col="rod"]').classList.add("sort-asc");
+    // Mark initial sort and apply it
+    document.querySelector('thead th[data-col="vedursverd"]').classList.add("sort-asc");
+    sortTable("vedursverd");
 
     // ── Leit ─────────────────────────────────────────────────────────────────
     function visibleRows() {
