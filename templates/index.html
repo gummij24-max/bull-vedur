@@ -27,6 +27,7 @@
           placeholder="T.d. Laugavegur 10, 101 Reykjavík..."
           autocomplete="off"
           aria-label="Heimilisfang"
+          value="Bessastaðir, 225 Garðabær"
         />
         <button id="clear-btn" class="clear-btn" aria-label="Hreinsa leit" hidden>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -681,6 +682,9 @@
         errorMsg.hidden = true;
       }
     }
+
+    // Default search on load
+    doSearch(searchInput.value.trim());
   </script>
 </body>
 </html>
